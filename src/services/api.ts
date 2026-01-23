@@ -1,68 +1,81 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
-export const api = {
-  get: async (endpoint: string, token?: string) => {
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-    });
-    
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
+class ApiClient {
+  private getToken(): string | null {
+    const storage = localStorage.getItem('auth-storage');
+    if (storage) {
+      const parsed = JSON.parse(storage);
+      return parsed.state?.token || null;
     }
-    
-    return response.json();
-  },
+    return null;
+  }
 
-  post: async (endpoint: string, data: unknown, token?: string) => {
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const token = this.getToken();
+
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    if (token) {
+      (headers as Record<string, string>).Authorization = `Bearer ${token}`;
+    }
+
     const response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers,
+    });
+
+    if (response.status === 401) {
+      localStorage.removeItem('auth-storage');
+      window.location.href = '/login';
+      throw new Error('Unauthorized: Please login again');
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `API Error: ${response.status}`);
+    }
+
+    if (response.status === 204) {
+      return {} as T;
+    }
+
+    return response.json();
+  }
+
+  async get<T>(endpoint: string): Promise<T> {
+    return this.request<T>(endpoint, { method: 'GET' });
+  }
+
+  async post<T>(endpoint: string, data?: unknown): Promise<T> {
+    return this.request<T>(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-      body: JSON.stringify(data),
+      body: data ? JSON.stringify(data) : undefined,
     });
-    
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
-    }
-    
-    return response.json();
-  },
+  }
 
-  put: async (endpoint: string, data: unknown, token?: string) => {
-    const response = await fetch(`${API_URL}${endpoint}`, {
+  async patch<T>(endpoint: string, data?: unknown): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  async put<T>(endpoint: string, data?: unknown): Promise<T> {
+    return this.request<T>(endpoint, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-      body: JSON.stringify(data),
+      body: data ? JSON.stringify(data) : undefined,
     });
-    
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
-    }
-    
-    return response.json();
-  },
+  }
 
-  delete: async (endpoint: string, token?: string) => {
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-    });
-    
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
-    }
-    
-    return response.json();
-  },
-};
+  async delete<T>(endpoint: string): Promise<T> {
+    return this.request<T>(endpoint, { method: 'DELETE' });
+  }
+}
+
+export const api = new ApiClient();

@@ -23,6 +23,10 @@ const queryClient = new QueryClient({
 });
 
 function App() {
+  const VITE_SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+  const VITE_API_URL = import.meta.env.VITE_API_URL;
+  console.log('Supabase URL:', VITE_SUPABASE_URL);
+  console.log('API URL:', VITE_API_URL);
   return (
     <QueryClientProvider client={queryClient}>
       <Router>
